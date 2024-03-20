@@ -1,0 +1,3 @@
+[submodule "vendor/zig-tray"]
+	path = vendor/zig-tray
+	url = https://github.com/svc-user/zig-tray.git
