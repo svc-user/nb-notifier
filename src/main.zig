@@ -14,15 +14,20 @@ pub fn main() !void {
 
     if (builtin.os.tag == .windows) {
         std.debug.print("setting up tray icon\n", .{});
-        try setUpTray();
+        //try setUpTray();
     }
-    std.debug.print("ready", .{});
-
-    const user: []const u8 = "<username>";
-    const password: []const u8 = "<password>";
+    std.debug.print("ready\n", .{});
 
     var client = try nb.NaturClient.init(allocator);
-    _ = try client.auth(user, password);
+    defer client.deinit() catch @panic("couldn't deinit NaturClient");
+
+    var creds = try nb.UserLogin.Load(allocator, "creds.json");
+    defer {
+        allocator.free(creds.password);
+        allocator.free(creds.username);
+    }
+
+    _ = try client.auth(creds.username, creds.password);
 }
 
 pub fn onQuit(menu: *tray.Menu) void {
