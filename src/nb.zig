@@ -8,6 +8,7 @@ pub const NaturClient = struct {
     http_client: http.Client,
     headers: http.Headers,
 
+    const url_base = "http://naturbasen.dk/";
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator) !*NaturClient {
@@ -16,13 +17,19 @@ pub const NaturClient = struct {
         c.http_client = http.Client{ .allocator = allocator };
         c.headers = http.Headers.init(allocator);
 
+        try c.headers.append("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0");
+
         return c;
     }
 
     const NbError = error{NoContent};
     fn request(self: *Self, url: []const u8, data: ?[]const u8) !std.http.Client.Request {
         const req_method = if (data == null) std.http.Method.GET else std.http.Method.POST;
-        var req = try self.http_client.request(req_method, try std.Uri.parse(url), self.headers, .{ .handle_redirects = false });
+
+        const full_url = try std.mem.concat(self.allocator, u8, &[_][]const u8{ url_base, url });
+        defer self.allocator.free(full_url);
+
+        var req = try self.http_client.request(req_method, try std.Uri.parse(full_url), self.headers, .{ .handle_redirects = false });
         //defer req.deinit();
 
         if (data) |post_body|
@@ -41,37 +48,38 @@ pub const NaturClient = struct {
             return NbError.NoContent;
         }
 
-        // const resp_buffer = try self.allocator.alloc(u8, cont_len * 5); // response is gzipped size. Multiply for large enough buffer.
-        // defer self.allocator.free(resp_buffer);
-
-        // const resp_size = try req.readAll(resp_buffer);
-
-        // const resp = try self.allocator.dupe(u8, resp_buffer[0..resp_size]);
         return req;
     }
 
-    fn getViewstate(self: *Self) ![2][]const u8 {
-        var req = try self.request("http://naturbasen.dk/login", null);
-        defer req.deinit();
-
+    fn get_content(self: *Self, req: *std.http.Client.Request) ![]u8 {
         const resp_buffer = try self.allocator.alloc(u8, (req.response.content_length orelse 0) * 5); // response is gzipped size. Multiply for large enough buffer.
         defer self.allocator.free(resp_buffer);
 
         const resp_size = try req.readAll(resp_buffer);
-        const get_resp = resp_buffer[0..resp_size];
+        const resp_body = self.allocator.dupe(u8, resp_buffer[0..resp_size]);
+
+        return resp_body;
+    }
+
+    fn getViewstate(self: *Self) ![2][]const u8 {
+        var req = try self.request("login", null);
+        defer req.deinit();
+
+        const resp_body = try self.get_content(&req);
+        defer self.allocator.free(resp_body);
 
         // Find __VIEWSTATE
-        const vs_start: usize = std.mem.indexOf(u8, get_resp, "id=\"__VIEWSTATE\" value=\"").? + 24; // is the length of the search string
-        const vs_end = std.mem.indexOf(u8, get_resp[vs_start..], "\"").? + vs_start;
+        const vs_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATE\" value=\"").? + 24; // is the length of the search string
+        const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
 
-        const viewState = try self.allocator.dupe(u8, get_resp[vs_start..vs_end]);
+        const viewState = try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
         std.debug.print("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
 
         // Find __VIEWSTATEGENERATOR
-        const vsg_start: usize = std.mem.indexOf(u8, get_resp, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
-        const vsg_end = std.mem.indexOf(u8, get_resp[vsg_start..], "\"").? + vsg_start;
+        const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
+        const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
 
-        const viewStateGenerator = try self.allocator.dupe(u8, get_resp[vsg_start..vsg_end]);
+        const viewStateGenerator = try self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
         std.debug.print("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
 
         return [_][]const u8{ viewState, viewStateGenerator };
@@ -98,12 +106,35 @@ pub const NaturClient = struct {
         try self.headers.append("Content-Type", "application/x-www-form-urlencoded");
         defer _ = self.headers.delete("Content-Type");
 
-        var req = try self.request("http://naturbasen.dk/login", post_body);
+        var req = try self.request("login", post_body);
         defer req.deinit();
 
-        std.debug.print("{any}\n", .{req.response.headers});
+        const login_body = try self.get_content(&req);
+        defer self.allocator.free(login_body);
+
+        // std.debug.print("{any}\n", .{req.response.headers});
+        // std.debug.print("{s}\n", .{login_body});
+
+        const cookieValue = req.response.headers.getFirstValue("Set-Cookie");
+        if (cookieValue) |cookie| {
+            try self.headers.append("Cookie", cookie);
+        }
 
         return true;
+    }
+
+    pub fn getUnreadCount(self: *Self) !u16 {
+        try self.headers.append("Accept", "text/plain, */*");
+        defer _ = self.headers.delete("Accept");
+
+        var req = try self.request("umbraco/api/notification/GetAntalUlaesteNotifikationer", null);
+        defer req.deinit();
+
+        const content = try self.get_content(&req);
+        defer self.allocator.free(content);
+
+        const unread = try std.fmt.parseUnsigned(u16, content, 10);
+        return unread;
     }
 
     pub fn deinit(self: *Self) !void {

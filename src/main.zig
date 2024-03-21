@@ -27,7 +27,13 @@ pub fn main() !void {
         allocator.free(creds.username);
     }
 
-    _ = try client.auth(creds.username, creds.password);
+    if (!try client.auth(creds.username, creds.password)) {
+        std.log.err("unable to authenticate user {s}\n", .{creds.username});
+        std.os.exit(1);
+    }
+
+    const ur = try client.getUnreadCount();
+    std.log.debug("user {s} has {d} unread notifications\n", .{ creds.username, ur });
 }
 
 pub fn onQuit(menu: *tray.Menu) void {
