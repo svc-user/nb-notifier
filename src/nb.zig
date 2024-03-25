@@ -7,6 +7,7 @@ pub const NaturClient = struct {
     allocator: std.mem.Allocator,
     http_client: http.Client,
     headers: http.Headers,
+    authenticatedUser: []const u8,
 
     const url_base = "http://naturbasen.dk/";
     const Self = @This();
@@ -56,7 +57,7 @@ pub const NaturClient = struct {
         defer self.allocator.free(resp_buffer);
 
         const resp_size = try req.readAll(resp_buffer);
-        const resp_body = self.allocator.dupe(u8, resp_buffer[0..resp_size]);
+        const resp_body = try self.allocator.dupe(u8, resp_buffer[0..resp_size]);
 
         return resp_body;
     }
@@ -73,14 +74,14 @@ pub const NaturClient = struct {
         const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
 
         const viewState = try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
-        std.debug.print("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
+        std.log.debug("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
 
         // Find __VIEWSTATEGENERATOR
         const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
         const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
 
         const viewStateGenerator = try self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
-        std.debug.print("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
+        std.log.debug("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
 
         return [_][]const u8{ viewState, viewStateGenerator };
     }
@@ -120,6 +121,8 @@ pub const NaturClient = struct {
             try self.headers.append("Cookie", cookie);
         }
 
+        self.authenticatedUser = try self.allocator.dupe(u8, username);
+
         return true;
     }
 
@@ -140,6 +143,7 @@ pub const NaturClient = struct {
     pub fn deinit(self: *Self) !void {
         self.headers.deinit();
         self.allocator.destroy(self);
+        self.allocator.free(self.authenticatedUser);
     }
 };
 

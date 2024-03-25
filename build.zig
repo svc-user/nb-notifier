@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const tray_mod = b.addModule("tray", .{ .source_file = .{ .cwd_relative = "vendor/zig-tray/src/tray.zig" } });
+    const zigwin32_mod = b.addModule("zigwin32", .{ .source_file = .{ .cwd_relative = "vendor/zigwin32/win32.zig" } });
     const exe = b.addExecutable(.{
         .name = "nb-notifier",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -12,6 +13,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.addModule("tray", tray_mod);
+    exe.addModule("zigwin32", zigwin32_mod);
 
     b.installArtifact(exe);
     b.installFile("icon.ico", "bin/icon.ico");

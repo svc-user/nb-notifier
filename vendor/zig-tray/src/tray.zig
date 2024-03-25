@@ -5,6 +5,7 @@ pub const Tray = struct {
     icon: std.os.windows.HICON,
     menu: []const ConstMenu,
 
+    onPopupClick: ?*const fn (*Tray) void = null,
     mutable_menu: ?[]Menu = null,
     running: bool = true,
     wc: std.os.windows.user32.WNDCLASSEXA = undefined,
@@ -171,7 +172,6 @@ pub const ConstMenu = struct {
     disabled: bool = false,
     checked: bool = false,
     onClick: ?*const fn (*Menu) void = null,
-    onPopupClick: ?*const fn (*Menu) void = null,
     submenu: ?[]const ConstMenu = null,
 };
 
@@ -181,7 +181,6 @@ pub const Menu = struct {
     disabled: bool,
     checked: bool,
     onClick: ?*const fn (*Menu) void,
-    onPopupClick: ?*const fn (*Menu) void,
     submenu: ?[]Menu,
 
     pub fn setText(self: *Menu, text: []const u8) void {
@@ -334,13 +333,9 @@ fn WndProc(hwnd: std.os.windows.HWND, uMsg: std.os.windows.UINT, wParam: std.os.
         },
         WM_TRAY_CALLBACK_MESSAGE => {
             if (lParam == NIN_BALLOONUSERCLICK) {
-                var item: MENUITEMINFOW = undefined;
-                var menup = getMenuItemFromWParam(&item, tray.hmenu, @intCast(lParam));
-                if (menup) |menu| {
-                    if (menu.onPopupClick) |onPopupClick| {
-                        onPopupClick(menu);
-                        tray.update();
-                    }
+                if (tray.onPopupClick) |onPopupClick| {
+                    onPopupClick(tray);
+                    tray.update();
                 }
             }
 
