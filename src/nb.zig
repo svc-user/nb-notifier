@@ -23,7 +23,7 @@ pub const NaturClient = struct {
         return c;
     }
 
-    const NbError = error{NoContent};
+    const NbError = error{ NoContent, CredsFileNotFound };
     fn request(self: *Self, url: []const u8, data: ?[]const u8) !std.http.Client.Request {
         const req_method = if (data == null) std.http.Method.GET else std.http.Method.POST;
 
@@ -74,14 +74,14 @@ pub const NaturClient = struct {
         const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
 
         const viewState = try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
-        std.log.debug("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
+        // std.log.debug("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
 
         // Find __VIEWSTATEGENERATOR
         const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
         const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
 
         const viewStateGenerator = try self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
-        std.log.debug("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
+        // std.log.debug("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
 
         return [_][]const u8{ viewState, viewStateGenerator };
     }
@@ -142,8 +142,9 @@ pub const NaturClient = struct {
 
     pub fn deinit(self: *Self) !void {
         self.headers.deinit();
-        self.allocator.destroy(self);
         self.allocator.free(self.authenticatedUser);
+
+        self.allocator.destroy(self);
     }
 };
 
@@ -152,7 +153,10 @@ pub const UserLogin = struct {
     password: []u8,
 
     pub fn Load(alloc: std.mem.Allocator, filepath: []const u8) !UserLogin {
-        const fp = try std.fs.cwd().openFile(filepath, .{});
+        const fp = std.fs.cwd().openFile(filepath, .{}) catch |err| {
+            std.log.err("Kunne ikke finde {s}. Fejl: {s}\n", .{ filepath, @errorName(err) });
+            return NaturClient.NbError.CredsFileNotFound;
+        };
         defer fp.close();
 
         var buff = try alloc.alloc(u8, 1024);

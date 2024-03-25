@@ -25,10 +25,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     state = try gpalloc.create(State);
+    defer gpalloc.destroy(state);
+
     state.allocator = gpalloc;
 
     state.client = try nb.NaturClient.init(state.allocator);
-    defer state.client.deinit() catch @panic("couldn't deinit NaturClient");
+    defer state.client.deinit() catch @panic("Fejl i afslutning af NaturClient");
 
     var creds = try nb.UserLogin.Load(state.allocator, "creds.json");
     defer {
@@ -37,13 +39,14 @@ pub fn main() !void {
     }
 
     if (!try state.client.auth(creds.username, creds.password)) {
-        std.log.err("unable to authenticate user {s}\n", .{creds.username});
+        std.log.err("Kunne ikke logge ind som {s}", .{creds.username});
         std.os.exit(1);
     }
 
     const nto = std.os.windows.kernel32.CreateThread(null, 0, &unreadCheckLoop, null, 0, null);
     if (nto) |nt| {
-        std.log.info("Created new notification checker thread with ID: {any}\n", .{nt});
+        _ = nt;
+        std.log.info("Tjekker efter notifikationer hvert minut.", .{});
     }
 
     try setUpTray(); //blocking
@@ -53,7 +56,7 @@ var lastNotificationCount: u32 = 0;
 fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std.os.windows.DWORD {
     while (true) {
         const ur = state.client.getUnreadCount() catch 9999;
-        std.log.info("user {s} has {d} unread notifications\n", .{ state.client.authenticatedUser, ur });
+        std.log.info("Bruger {s} har {d} ulæste notifikationer.", .{ state.client.authenticatedUser, ur });
 
         if (ur > lastNotificationCount) {
             const msg = std.fmt.allocPrint(state.allocator, "Hej {s}!\nDu har {d} {s} notifikationer!", .{ state.client.authenticatedUser, ur, if (ur == 1) "ulæst" else "ulæste" }) catch |err| @panic(@errorName(err));
