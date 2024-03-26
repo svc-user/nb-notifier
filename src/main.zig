@@ -55,7 +55,7 @@ pub fn main() !void {
 var lastNotificationCount: u32 = 0;
 fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std.os.windows.DWORD {
     while (true) {
-        std.time.sleep(Seconds(10));
+        std.time.sleep(Seconds(300));
 
         const ur = state.client.getUnreadCount(state.client.userInfo.Id) catch 9999;
 

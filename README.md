@@ -1,6 +1,12 @@
 # nb-notifier
 Få besked om ulæste notifikation på naturbasen.dk som en notifikation på dit skrivebord.
 
+## Byg af kode
+Koden er skrevet i programmeringssproget [Zig](https://ziglang.org/), specifikt version 0.11.0.
+
+## Download af program
+Hvis man ikke selv kan eller vil bygge programmet ligger der et bygget program under [Releases](https://github.com/svc-user/nb-notifier/releases).
+
 ## Opsætning
 For at programmet kan tjekke notifikationer skal du angive brugernavn og kodeord. 
 
