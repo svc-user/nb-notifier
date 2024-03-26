@@ -4,6 +4,8 @@ FÃ¥ besked om ulÃ¦ste notifikation pÃ¥ naturbasen.dk som en notifikation pÃ¥ dit
 ## Byg af kode
 Koden er skrevet i programmeringssproget [Zig](https://ziglang.org/), specifikt version 0.11.0.
 
+Projektet benytter `git submodules` så husk `--recurse-submodules` når du kloner eller hent dem efterfølgende med `git submodule update --recursive --init`.
+
 ## Download af program
 Hvis man ikke selv kan eller vil bygge programmet ligger der et bygget program under [Releases](https://github.com/svc-user/nb-notifier/releases).
 
