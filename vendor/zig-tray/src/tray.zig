@@ -189,6 +189,8 @@ pub const Menu = struct {
         var text_utf16 = std.unicode.utf8ToUtf16LeWithNull(self.tray.allocator, text) catch return;
         self.tray.allocator.free(self.text);
         self.text = text_utf16;
+
+        self.tray.update();
     }
 };
 
