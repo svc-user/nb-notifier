@@ -1,3 +1,6 @@
 [submodule "vendor/zigwin32"]
 	path = vendor/zigwin32
 	url = https://github.com/marlersoft/zigwin32.git
+[submodule "vendor/zig-tray"]
+	path = vendor/zig-tray
+	url = https://github.com/svc-user/zig-tray.git
