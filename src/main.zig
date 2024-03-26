@@ -5,7 +5,7 @@ const tray = @import("tray");
 const nb = @import("nb.zig");
 
 const State = struct {
-    tray: tray.Tray,
+    tray: *tray.Tray,
     client: *nb.NaturClient,
     allocator: std.mem.Allocator,
 };
@@ -46,7 +46,7 @@ pub fn main() !void {
     const nto = std.os.windows.kernel32.CreateThread(null, 0, &unreadCheckLoop, null, 0, null);
     if (nto) |nt| {
         _ = nt;
-        std.log.info("Tjekker efter notifikationer hvert minut.", .{});
+        std.log.info("Tjekker efter notifikationer hvert 5. minut.", .{});
     }
 
     try setUpTray(); //blocking
@@ -55,19 +55,23 @@ pub fn main() !void {
 var lastNotificationCount: u32 = 0;
 fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std.os.windows.DWORD {
     while (true) {
-        const ur = state.client.getUnreadCount() catch 9999;
-        std.log.info("Bruger {s} har {d} ulæste notifikationer.", .{ state.client.authenticatedUser, ur });
+        std.time.sleep(Seconds(300));
+
+        const ur = state.client.getUnreadCount(state.client.userInfo.Id) catch 9999;
+        std.log.info("{d}: Bruger {s} har {d} ulæste notifikationer.", .{ std.time.timestamp(), state.client.userInfo.Name, ur });
 
         if (ur > lastNotificationCount) {
-            const msg = std.fmt.allocPrint(state.allocator, "Hej {s}!\nDu har {d} {s} notifikationer!", .{ state.client.authenticatedUser, ur, if (ur == 1) "ulæst" else "ulæste" }) catch |err| @panic(@errorName(err));
+            const msg = std.fmt.allocPrint(state.allocator, "Hej {s}!\nDu har {d} {s} notifikationer!", .{ state.client.userInfo.Name, ur, if (ur == 1) "ulæst" else "ulæste" }) catch |err| @panic(@errorName(err));
             defer state.allocator.free(msg);
 
-            state.tray.showNotification("Ulæste notifikation på Naturbasen.dk", msg, 15000);
+            const res = state.tray.showNotification("Ulæste notifikation på Naturbasen.dk", msg, 15000);
+            if (res != 1) {
+                const le = std.os.windows.kernel32.GetLastError();
+                std.log.err("showNotification: {d}", .{le});
+            }
 
-            lastNotificationCount = ur;
+            lastNotificationCount = if (ur == 9999) 0 else ur;
         }
-
-        std.time.sleep(Seconds(60));
     }
 }
 
@@ -156,6 +160,6 @@ fn setUpTray() !void {
     // zig fmt: on
     try tray_inst.init();
     defer tray_inst.deinit();
-    state.tray = tray_inst;
+    state.tray = &tray_inst;
     tray_inst.run();
 }

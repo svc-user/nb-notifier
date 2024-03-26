@@ -1,13 +1,20 @@
 const std = @import("std");
 const http = std.http;
 
-const HttpResponse = struct {};
+pub const UserInfo = struct {
+    Id: u32,
+    userName: []const u8,
+    Name: []const u8,
+};
 
+const NbError = error{ NoContent, CredsFileNotFound, ViewStateNotFound };
 pub const NaturClient = struct {
     allocator: std.mem.Allocator,
     http_client: http.Client,
     headers: http.Headers,
-    authenticatedUser: []const u8,
+    userInfo: *UserInfo,
+    // authenticatedUser: []const u8,
+    // authenticatedUserId: u32 = 0,
 
     const url_base = "http://naturbasen.dk/";
     const Self = @This();
@@ -17,13 +24,13 @@ pub const NaturClient = struct {
         c.allocator = allocator;
         c.http_client = http.Client{ .allocator = allocator };
         c.headers = http.Headers.init(allocator);
+        c.userInfo = try allocator.create(UserInfo);
 
         try c.headers.append("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0");
 
         return c;
     }
 
-    const NbError = error{ NoContent, CredsFileNotFound };
     fn request(self: *Self, url: []const u8, data: ?[]const u8) !std.http.Client.Request {
         const req_method = if (data == null) std.http.Method.GET else std.http.Method.POST;
 
@@ -62,6 +69,26 @@ pub const NaturClient = struct {
         return resp_body;
     }
 
+    fn get_field_value(self: *Self, body: []const u8, fieldId: []const u8) !?[]u8 {
+        const searchString = try std.fmt.allocPrint(self.allocator, "id=\"{s}\"", .{fieldId});
+        defer self.allocator.free(searchString);
+
+        var lines = std.mem.tokenizeScalar(u8, body, '\n');
+        while (lines.next()) |line| {
+            if (std.mem.indexOf(u8, line, searchString)) |idx| {
+                if (std.mem.indexOf(u8, line[idx..], "value=\"")) |vidx| {
+                    const start_idx = idx + vidx + 7; // vidx + Length(value=")
+                    const m_end_idx: ?usize = std.mem.indexOf(u8, line[start_idx..], "\"") orelse null;
+                    if (m_end_idx) |end_idx| {
+                        const fieldValue = try self.allocator.dupe(u8, line[start_idx .. start_idx + end_idx]);
+                        return fieldValue;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     fn getViewstate(self: *Self) ![2][]const u8 {
         var req = try self.request("login", null);
         defer req.deinit();
@@ -70,23 +97,32 @@ pub const NaturClient = struct {
         defer self.allocator.free(resp_body);
 
         // Find __VIEWSTATE
-        const vs_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATE\" value=\"").? + 24; // is the length of the search string
-        const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
+        // const vs_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATE\" value=\"").? + 24; // is the length of the search string
+        // const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
+        // _ = vs_end;
 
-        const viewState = try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
+        const m_viewState = try self.get_field_value(resp_body, "__VIEWSTATE"); // try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
         // std.log.debug("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
 
         // Find __VIEWSTATEGENERATOR
-        const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
-        const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
+        // const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
+        // const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
 
-        const viewStateGenerator = try self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
+        const m_viewStateGenerator = try self.get_field_value(resp_body, "__VIEWSTATEGENERATOR"); // self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
         // std.log.debug("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
 
-        return [_][]const u8{ viewState, viewStateGenerator };
+        if (m_viewState) |viewState| {
+            if (m_viewStateGenerator) |viewStateGenerator| {
+                return [_][]const u8{ viewState, viewStateGenerator };
+            }
+        }
+
+        return NbError.ViewStateNotFound;
     }
 
     pub fn auth(self: *Self, username: []const u8, password: []const u8) !bool {
+
+        // Get viewstate to be able to POST
         const viewstateInfo = try self.getViewstate();
         defer {
             self.allocator.free(viewstateInfo[0]);
@@ -104,33 +140,64 @@ pub const NaturClient = struct {
             "&__VIEWSTATEGENERATOR={s}", .{ username, password, escaped_viewstate, viewstateInfo[1] });
         defer self.allocator.free(post_body);
 
-        try self.headers.append("Content-Type", "application/x-www-form-urlencoded");
-        defer _ = self.headers.delete("Content-Type");
+        { // Send POST request to authenticate
+            try self.headers.append("Content-Type", "application/x-www-form-urlencoded");
+            defer _ = self.headers.delete("Content-Type");
 
-        var req = try self.request("login", post_body);
-        defer req.deinit();
+            var req = try self.request("login", post_body);
+            defer req.deinit();
+            const login_body = try self.get_content(&req);
+            defer self.allocator.free(login_body);
 
-        const login_body = try self.get_content(&req);
-        defer self.allocator.free(login_body);
+            // std.debug.print("{any}\n", .{req.response.headers});
+            // std.debug.print("{s}\n", .{login_body});
 
-        // std.debug.print("{any}\n", .{req.response.headers});
-        // std.debug.print("{s}\n", .{login_body});
-
-        const cookieValue = req.response.headers.getFirstValue("Set-Cookie");
-        if (cookieValue) |cookie| {
-            try self.headers.append("Cookie", cookie);
+            // Extract authentication cookie
+            const cookieValue = req.response.headers.getFirstValue("Set-Cookie");
+            if (cookieValue) |cookie| {
+                try self.headers.append("Cookie", cookie);
+            } else {
+                return false;
+            }
         }
 
-        self.authenticatedUser = try self.allocator.dupe(u8, username);
+        { // Collect userInfo
+            var req = try self.request("bruger/", null);
+            defer req.deinit();
+            const user_body = try self.get_content(&req);
+            defer self.allocator.free(user_body);
 
+            // Find user id
+            const ruid = try self.get_field_value(user_body, "fogNBrugerID");
+            if (ruid) |uid| {
+                defer self.allocator.free(uid);
+                self.userInfo.Id = try std.fmt.parseInt(u32, uid, 10);
+            } else {
+                return false;
+            }
+
+            // Find real name
+            const rname = try self.get_field_value(user_body, "memberName");
+            if (rname) |name| {
+                defer self.allocator.free(name);
+                self.userInfo.Name = try self.allocator.dupe(u8, name);
+            } else {
+                return false;
+            }
+
+            // Duplicate username
+            self.userInfo.userName = try self.allocator.dupe(u8, username);
+        }
         return true;
     }
 
-    pub fn getUnreadCount(self: *Self) !u16 {
+    pub fn getUnreadCount(self: *Self, userID: u32) !u16 {
         try self.headers.append("Accept", "text/plain, */*");
         defer _ = self.headers.delete("Accept");
 
-        var req = try self.request("umbraco/api/notification/GetAntalUlaesteNotifikationer", null);
+        const url = try std.fmt.allocPrint(self.allocator, "umbraco/api/notification/GetAntalUlaesteNotifikationer?brugerID={d}", .{userID});
+        defer self.allocator.free(url);
+        var req = try self.request(url, null);
         defer req.deinit();
 
         const content = try self.get_content(&req);
@@ -142,8 +209,10 @@ pub const NaturClient = struct {
 
     pub fn deinit(self: *Self) !void {
         self.headers.deinit();
-        self.allocator.free(self.authenticatedUser);
+        self.allocator.free(self.userInfo.Name);
+        self.allocator.free(self.userInfo.userName);
 
+        self.allocator.destroy(self.userInfo);
         self.allocator.destroy(self);
     }
 };
@@ -155,7 +224,7 @@ pub const UserLogin = struct {
     pub fn Load(alloc: std.mem.Allocator, filepath: []const u8) !UserLogin {
         const fp = std.fs.cwd().openFile(filepath, .{}) catch |err| {
             std.log.err("Kunne ikke finde {s}. Fejl: {s}\n", .{ filepath, @errorName(err) });
-            return NaturClient.NbError.CredsFileNotFound;
+            return NbError.CredsFileNotFound;
         };
         defer fp.close();
 
@@ -171,10 +240,4 @@ pub const UserLogin = struct {
             .password = try alloc.dupe(u8, @field(parsed.value, "password")),
         };
     }
-
-    // pub fn deinit(self: *UserLogin) void {
-    //     self.allocator.free(self.username);
-    //     self.allocator.free(self.password);
-    //     self.allocator.destroy(self);
-    // }
 };

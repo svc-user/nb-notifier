@@ -70,15 +70,15 @@ pub const Tray = struct {
         self.running = false;
     }
 
-    pub fn showNotification(self: *Tray, title: []const u8, text: []const u8, timeout_ms: u32) void {
+    pub fn showNotification(self: *Tray, title: []const u8, text: []const u8, timeout_ms: u32) std.os.windows.BOOL {
         var old_flags = self.nid.uFlags;
         self.nid.uFlags |= NIF_INFO;
         self.nid.DUMMYUNIONNAME.uTimeout = timeout_ms;
         self.nid.dwInfoFlags = 0;
 
-        var title_utf16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, title) catch return;
+        var title_utf16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, title) catch return 0;
         defer self.allocator.free(title_utf16);
-        var text_utf16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, text) catch return;
+        var text_utf16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, text) catch return 0;
         defer self.allocator.free(text_utf16);
 
         var i: usize = 0;
@@ -93,8 +93,10 @@ pub const Tray = struct {
         }
         self.nid.szInfo[i] = 0;
 
-        _ = Shell_NotifyIconW(NIM_MODIFY, &self.nid);
+        const res = Shell_NotifyIconW(NIM_MODIFY, &self.nid);
         self.nid.uFlags = old_flags;
+
+        return res;
     }
 
     // recursive function
