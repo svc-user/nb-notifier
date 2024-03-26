@@ -58,6 +58,14 @@ fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std
         std.time.sleep(Seconds(300));
 
         const ur = state.client.getUnreadCount(state.client.userInfo.Id) catch 9999;
+
+        const trayText = std.fmt.allocPrint(state.allocator, "nb-notifier ({d})", .{ur}) catch "nb-notifier";
+        defer state.allocator.free(trayText);
+
+        if (state.tray.mutable_menu) |mm| {
+            mm[0].setText(trayText);
+        }
+
         std.log.info("{d}: Bruger {s} har {d} ulæste notifikationer.", .{ std.time.timestamp(), state.client.userInfo.Name, ur });
 
         if (ur > lastNotificationCount) {
@@ -119,6 +127,17 @@ pub fn onInfoClicked(_: *tray.Menu) void {
     };
 }
 
+pub fn onMyNotificationsClicked(_: *tray.Menu) void {
+    // https://www.naturbasen.dk/notifikationer
+    const browser = getBrowser() catch |err| @panic(@errorName(err));
+    defer state.allocator.free(browser);
+
+    var childProc = std.ChildProcess.init(&[_][]const u8{ browser, "https://www.naturbasen.dk/notifikationer" }, state.allocator);
+    childProc.spawn() catch |err| {
+        std.log.err("unable to spawn notification page with error {s}\n", .{@errorName(err)});
+    };
+}
+
 pub fn onPopupClicked(_: *tray.Tray) void {
     // https://www.naturbasen.dk/notifikationer
     const browser = getBrowser() catch |err| @panic(@errorName(err));
@@ -133,7 +152,7 @@ pub fn onPopupClicked(_: *tray.Tray) void {
 fn setUpTray() !void {
     // zig fmt: off
     var tray_inst = tray.Tray{ 
-        .allocator = std.heap.page_allocator, 
+        .allocator = state.allocator, 
         .icon = try tray.createIconFromFile("icon.ico"), 
         .onPopupClick = onPopupClicked,
         .menu = &[_]tray.ConstMenu{
@@ -142,8 +161,12 @@ fn setUpTray() !void {
                 .disabled = true,
             },
             .{
-                .text = "Info",
+                .text = "Info om programmet",
                 .onClick = onInfoClicked,
+            },
+            .{
+                .text = "Mine notifikation",
+                .onClick = onMyNotificationsClicked,
             },
             .{
                 .text = "Luk",
