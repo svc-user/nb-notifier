@@ -13,8 +13,6 @@ pub const NaturClient = struct {
     http_client: http.Client,
     headers: http.Headers,
     userInfo: *UserInfo,
-    // authenticatedUser: []const u8,
-    // authenticatedUserId: u32 = 0,
 
     const url_base = "http://naturbasen.dk/";
     const Self = @This();
@@ -38,7 +36,6 @@ pub const NaturClient = struct {
         defer self.allocator.free(full_url);
 
         var req = try self.http_client.request(req_method, try std.Uri.parse(full_url), self.headers, .{ .handle_redirects = false });
-        //defer req.deinit();
 
         if (data) |post_body|
             req.transfer_encoding = .{ .content_length = post_body.len };
@@ -77,7 +74,7 @@ pub const NaturClient = struct {
         while (lines.next()) |line| {
             if (std.mem.indexOf(u8, line, searchString)) |idx| {
                 if (std.mem.indexOf(u8, line[idx..], "value=\"")) |vidx| {
-                    const start_idx = idx + vidx + 7; // vidx + Length(value=")
+                    const start_idx = idx + vidx + 7; // idx + vidx + Length(value=")
                     const m_end_idx: ?usize = std.mem.indexOf(u8, line[start_idx..], "\"") orelse null;
                     if (m_end_idx) |end_idx| {
                         const fieldValue = try self.allocator.dupe(u8, line[start_idx .. start_idx + end_idx]);
@@ -96,20 +93,8 @@ pub const NaturClient = struct {
         const resp_body = try self.get_content(&req);
         defer self.allocator.free(resp_body);
 
-        // Find __VIEWSTATE
-        // const vs_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATE\" value=\"").? + 24; // is the length of the search string
-        // const vs_end = std.mem.indexOf(u8, resp_body[vs_start..], "\"").? + vs_start;
-        // _ = vs_end;
-
-        const m_viewState = try self.get_field_value(resp_body, "__VIEWSTATE"); // try self.allocator.dupe(u8, resp_body[vs_start..vs_end]);
-        // std.log.debug("got viewstate: __VIEWSTATE=\"{s}\"\n", .{viewState});
-
-        // Find __VIEWSTATEGENERATOR
-        // const vsg_start: usize = std.mem.indexOf(u8, resp_body, "id=\"__VIEWSTATEGENERATOR\" value=\"").? + 33; // is the length of the search string
-        // const vsg_end = std.mem.indexOf(u8, resp_body[vsg_start..], "\"").? + vsg_start;
-
-        const m_viewStateGenerator = try self.get_field_value(resp_body, "__VIEWSTATEGENERATOR"); // self.allocator.dupe(u8, resp_body[vsg_start..vsg_end]);
-        // std.log.debug("got viewStateGenerator: __VIEWSTATEGENERATOR=\"{s}\"\n", .{viewStateGenerator});
+        const m_viewState = try self.get_field_value(resp_body, "__VIEWSTATE");
+        const m_viewStateGenerator = try self.get_field_value(resp_body, "__VIEWSTATEGENERATOR");
 
         if (m_viewState) |viewState| {
             if (m_viewStateGenerator) |viewStateGenerator| {
@@ -148,9 +133,6 @@ pub const NaturClient = struct {
             defer req.deinit();
             const login_body = try self.get_content(&req);
             defer self.allocator.free(login_body);
-
-            // std.debug.print("{any}\n", .{req.response.headers});
-            // std.debug.print("{s}\n", .{login_body});
 
             // Extract authentication cookie
             const cookieValue = req.response.headers.getFirstValue("Set-Cookie");

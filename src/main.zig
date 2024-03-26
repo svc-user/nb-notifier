@@ -77,10 +77,6 @@ fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std
 
 const registry = zigwin32.system.registry;
 fn getBrowser() ![]const u8 {
-    // Computer\HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice ProgID
-    // Computer\HKEY_CLASSES_ROOT\<ProgID>\shell\open\command
-    // FirefoxURL-308046B0AF4A39CB
-
     // Get user choise handler for HTTP
     var userChoiseKeyHndl: ?registry.HKEY = undefined;
     _ = registry.RegOpenKeyA(registry.HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice", &userChoiseKeyHndl);
@@ -113,9 +109,7 @@ pub fn onQuitClicked(menu: *tray.Menu) void {
     menu.tray.exit();
 }
 
-pub fn onInfoClicked(menu: *tray.Menu) void {
-    _ = menu;
-    // TODO: Open browser to github
+pub fn onInfoClicked(_: *tray.Menu) void {
     const browser = getBrowser() catch |err| @panic(@errorName(err));
     defer state.allocator.free(browser);
 
@@ -125,8 +119,7 @@ pub fn onInfoClicked(menu: *tray.Menu) void {
     };
 }
 
-pub fn onPopupClicked(ctray: *tray.Tray) void {
-    _ = ctray;
+pub fn onPopupClicked(_: *tray.Tray) void {
     // https://www.naturbasen.dk/notifikationer
     const browser = getBrowser() catch |err| @panic(@errorName(err));
     defer state.allocator.free(browser);
