@@ -72,7 +72,7 @@ fn unreadCheckLoop(_: std.os.windows.LPVOID) callconv(std.os.windows.WINAPI) std
             const msg = std.fmt.allocPrint(state.allocator, "Hej {s}!\nDu har {d} {s} notifikationer!", .{ state.client.userInfo.Name, ur, if (ur == 1) "ulæst" else "ulæste" }) catch |err| @panic(@errorName(err));
             defer state.allocator.free(msg);
 
-            const res = state.tray.showNotification("Ulæste notifikation på Naturbasen.dk", msg, 15000);
+            const res = state.tray.showNotification("Ulæste notifikation på Naturbasen.dk", msg, 30000);
             if (res != 1) {
                 const le = std.os.windows.kernel32.GetLastError();
                 std.log.err("showNotification: {d}", .{le});

@@ -1,10 +1,10 @@
 # nb-notifier
-Få besked om ulæste notifikation på naturbasen.dk som en notifikation på dit skrivebord.
+Få besked om ulæte notifikation på naturbasen.dk som en notifikation på dit skrivebord.
 
 ## Byg af kode
 Koden er skrevet i programmeringssproget [Zig](https://ziglang.org/), specifikt version 0.11.0.
 
-Projektet benytter `git submodules` s� husk `--recurse-submodules` n�r du kloner eller hent dem efterf�lgende med `git submodule update --recursive --init`.
+Projektet benytter `git submodules` så husk `--recurse-submodules` når du kloner eller hent dem efterfølgende med `git submodule update --recursive --init`.
 
 ## Download af program
 Hvis man ikke selv kan eller vil bygge programmet ligger der et bygget program under [Releases](https://github.com/svc-user/nb-notifier/releases).
@@ -27,14 +27,14 @@ Når programmet er startet får du et lille "Naturbasen" ikon i dit notifikation
 
 Klikker man med musen på ikonet åbner en lille menu. 
 
-Her kan man se (i parantes) hvor mange ulæste notifikater man har, samt klikke sig ind på GitHub (Info om programmet), Notifikationssiden på Naturbasen (Mine notifikationer) eller lukke programmet (Luk).
+Her kan man se (i parantes) hvor mange ulæte notifikater man har, samt klikke sig ind på GitHub (Info om programmet), Notifikationssiden på Naturbasen (Mine notifikationer) eller lukke programmet (Luk).
 
 ![programmenu](assets/menu.png)
 
 ---
 
-Når det så sker, at der er kommet flere ulæste notifikationer på Naturbasen end ved sidste tjek kommer en popup i windows med besked om hvor mange ulæste notifikationer der er. 
+Når det så sker, at der er kommet flere ulæte notifikationer på Naturbasen end ved sidste tjek kommer en popup i windows med besked om hvor mange ulæte notifikationer der er. 
 
 Man kan klikke på popup-en for at åbne Naturbasen direkte i browseren.
 
-![notifikation ved ulæste beskeder](assets/popup.png)
+![notifikation ved ulæte beskeder](assets/popup.png)
